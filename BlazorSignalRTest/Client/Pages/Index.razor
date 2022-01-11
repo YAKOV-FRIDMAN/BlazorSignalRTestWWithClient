@@ -1,0 +1,108 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.AspNetCore.Http;
+@inject NavigationManager NavigationManager
+@implements IAsyncDisposable
+@attribute [Authorize]
+@inject NavigationManager Navigation
+@inject SignOutSessionStateManager SignOutManager
+<AuthorizeView>
+    <Authorized>
+        @{
+            userInput = context.User.Identity.Name;
+
+    }
+</Authorized>
+<NotAuthorized>
+
+</NotAuthorized>
+</AuthorizeView>
+
+<div class="form-group">
+    <label>
+        User:
+        <input @bind="userInput" />
+    </label>
+</div>
+<div class="form-group">
+    <label>
+        Message:
+        <input @bind="messageInput" size="50" />
+    </label>
+
+</div>
+<div class="form-group">
+    <label>
+        To (Email):
+        <input @bind="toUser" />
+    </label>
+</div>
+<button @onclick="Send" disabled="@(!IsConnected)">Send</button>
+
+<button @onclick="Start"  >Start</button>
+
+<hr>
+
+<ul id="messagesList">
+    @foreach (var message in messages)
+    {
+        <li>@message</li>
+    }
+</ul>
+
+@code {
+
+    //[Inject]
+    //private IHttpContextAccessor HttpContextAccessor { get; set; } = default!;
+
+    private HubConnection hubConnection;
+    private List<string> messages = new List<string>();
+    private string userInput;
+    private string messageInput;
+    private string toUser;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        //, op => { op.UseDefaultCredentials = true; }
+        hubConnection = new HubConnectionBuilder()
+        .WithUrl(NavigationManager.ToAbsoluteUri("/chathub"))
+        .Build();
+
+        hubConnection.On<string, string>("ReceiveMessage", (user, message) =>
+        {
+            var encodedMsg = $"{user}: {message}";
+            messages.Add(encodedMsg);
+            StateHasChanged();
+        });
+
+        //hubConnection.On<string>("OnConnectedAsync", (d) =>
+        //{
+
+        //});
+        // await hubConnection.InvokeAsync<string>("Login", userInput);
+        //await hubConnection.StartAsync();
+        //await hubConnection.SendAsync("Login", userInput);
+    }
+
+    async Task Start()
+    {
+        await hubConnection.StartAsync();
+        await hubConnection.SendAsync("Login", userInput);
+    }
+
+
+    Task Send() =>
+        hubConnection.SendAsync("SendMessage", userInput, toUser, messageInput);
+
+    public bool IsConnected =>
+        hubConnection.State == HubConnectionState.Connected;
+
+    public async ValueTask DisposeAsync()
+    {
+        await hubConnection.DisposeAsync();
+
+    }
+}
